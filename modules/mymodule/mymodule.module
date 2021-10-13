@@ -1,0 +1,66 @@
+<?php
+
+/**
+ * Example code allows pull of any other content into drupal.  
+ * Not for production use, possibility of Man-In-Middle security attack.
+ */
+
+/**
+ * Implements hook_block_info().
+ */
+function mymodule_include_block_info()
+{
+    $blocks = array();
+
+    $blocks['mymodule_include_block'] = array(
+        'info' => t('MyModule Block Include'),
+        'cache' => DRUPAL_CACHE_PER_ROLE
+    );
+
+    return $blocks;
+}
+
+/**
+ * Implements hook_pageinclude_block_view
+ */
+function mymodule_pageinclude_block_view($delta = '')
+{
+    $parts = explode('|', $delta);
+    $type = strtolower($parts[0]);
+    $delta = $parts[1];
+    $url = $type . '://' . $delta;
+
+    //validate input
+    if (
+        !$type || ($type != 'http' && $type != 'https') || !$delta
+        || !filter_var($url, FILTER_VALIDATE_URL)
+    ) {
+        return [];
+    }
+
+    //append query_string
+    $url = !empty($_SERVER['QUERY_STRING']) ? $url . "?" . $_SERVER['QUERY_STRING'] : $url;
+
+    $context = NULL;
+    if (isset($_SERVER['HTTP_HOST']) && isset($_SERVER['REQUEST_URI']) && function_exists("stream_context_create")) {
+        //let the resulting server know where the request is coming from
+        $context = stream_context_create(array(
+            'http' => array(
+                'method' => 'GET',
+                'header' => 'Referer: ' . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI']
+            )
+        ));
+    }
+
+    //get the contents
+    $results = file_get_contents($url, false, $context);
+    //return the markup in the block
+    $block['content'] = array(
+        'list' => array(
+            '#type' => 'markup',
+            '#markup' => $results
+        )
+    );
+
+    return $block;
+}
